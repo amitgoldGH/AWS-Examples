@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+usage() {
+    echo "Usage: $0 <bucket-name> [--profile <aws-profile-name>]"
+    echo "Note: If --profile not used, default aws profile will be used."
+    echo "Example: $0 my-example-bucket --profile myawsprofile"
+}
+
+# Help
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  usage
+  exit 0
+fi
+
+# Check if the first arguement is not an empty string
+# -z STRING is equal to true if STRING is empty.
+if [[ "${1:-}" == --* || -z "$1" ]]; then
+    echo "No bucket name provided."
+    usage
+    exit 1
+fi
+
+BUCKET_NAME=$1
+shift
+
+# Defaults
+PROFILE_NAME="default"
+
+# Parse arguments
+# While number of arguments greater than zero
+# check for profile or query flags, and read the flag + value, then shift rest of arguments down 2 positions.
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    "--profile")
+      [[ -n "${2:-}" || "$2" == --* ]] || { echo "Error: --profile requires a value."; exit 1; }
+      PROFILE_NAME="$2"
+      check_profile=$(aws configure list-profiles | grep -Fx "$PROFILE_NAME")
+      if [ -z "$check_profile" ]; then
+        echo "Error: AWS Profile not configured! (profile name: $PROFILE_NAME)"
+        exit 1
+      fi
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+#https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html
+aws s3api create-bucket \
+--bucket $BUCKET_NAME \
+--profile $PROFILE_NAME

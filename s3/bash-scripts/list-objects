@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+
+usage() {
+    echo "Usage: $0 <bucket-name> [--profile <aws-profile-name>] [--query '<JMESPath Query>']"
+    echo "Note: If --profile not used, default aws profile will be used."
+    echo "Example: $0 my-example-aws-bucket --profile myawsprofile --query 'Contents[?Size > \`0\`].{Key: Key, Size: Size}'"
+}
+
+
+# Help
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  usage
+  exit 0
+fi
+
+# Required bucket (if no bucket name provided returns empty string -z checks that it's empty and goes into if statement)
+if [[ -z "${1:-}" ]]; then
+  echo "No bucket name provided."
+  usage
+  exit 1
+fi
+BUCKET_NAME="$1"
+#After saving first argument[bucket name] to var, shift all other arguments 1 position down.
+shift
+
+# Defaults
+PROFILE_NAME="default"
+QUERY=""
+
+# Parse remaining arguments
+# While number of arguments greater than zero
+# check for profile or query flags, and read the flag + value, then shift rest of arguments down 2 positions.
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    "--profile")
+      [[ -n "${2:-}" || "$2" == --* ]] || { echo "Error: --profile requires a value."; exit 1; }
+      PROFILE_NAME="$2"
+      check_profile=$(aws configure list-profiles | grep -Fx "$PROFILE_NAME")
+      if [ -z "$check_profile" ]; then
+        echo "Error: AWS Profile not configured! (profile name: $PROFILE_NAME)"
+        exit 1
+      fi
+      shift 2
+      ;;
+    "--query")
+      [[ -n "${2:-}" || "$2" == --* ]] || { echo "Error: --query requires a value."; exit 1; }
+      QUERY="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+# Check bucket exists and belongs to the script executer
+if aws s3api head-bucket \
+     --bucket "$BUCKET_NAME" \
+     --profile "$PROFILE_NAME" \
+     >/dev/null 2>&1; then
+
+  echo "Bucket exists and is accessible with this profile."
+# in case bucket is not accessible with given credentials/doesn't exist
+else
+  err=$(aws s3api head-bucket \
+          --bucket "$BUCKET_NAME" \
+          --profile "$PROFILE_NAME" \
+          2>&1 >/dev/null)
+
+  if echo "$err" | grep -q '404'; then
+    echo "Bucket does not exist."
+  elif echo "$err" | grep -q '403'; then
+    echo "Bucket exists but access is denied for this profile."
+  else
+    echo "Bucket check failed:"
+    echo "$err"
+  fi
+
+  exit 1
+fi
+
+# Build aws API call
+if [[ -n "$QUERY" ]]; then
+    result=$(aws s3api list-objects --bucket "$BUCKET_NAME" --profile "$PROFILE_NAME" --query "$QUERY" --output json)
+    if [ "$result" == "null" ]; then
+        echo "Returned result is null, either non found or invalid query."
+        echo "Your query was: $QUERY"
+        exit 0
+    fi
+    echo "$result"
+    exit 0
+else
+    aws s3api list-objects --bucket "$BUCKET_NAME" --profile "$PROFILE_NAME" --output json
+fi
