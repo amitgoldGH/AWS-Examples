@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+echo "deploy s3 bucket via cfn (cloudformation)"
+
+STACK_NAME="cfn-s3-simple"
+
+# Defaults
+PROFILE_NAME="default"
+
+# Parse arguments
+# While number of arguments greater than zero
+# check for profile or query flags, and read the flag + value, then shift rest of arguments down 2 positions.
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    "--profile")
+      [[ -n "${2:-}" || "$2" == --* ]] || { echo "Error: --profile requires a value."; exit 1; }
+      PROFILE_NAME="$2"
+      check_profile=$(aws configure list-profiles | grep -Fx "$PROFILE_NAME")
+      if [ -z "$check_profile" ]; then
+        echo "Error: AWS Profile not configured! (profile name: $PROFILE_NAME)"
+        exit 1
+      fi
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+aws cloudformation deploy \
+--template-file template.yaml \
+--no-execute-changeset \
+--region us-east-1 \
+--stack-name $STACK_NAME \
+--profile $PROFILE_NAME
