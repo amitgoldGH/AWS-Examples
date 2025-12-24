@@ -1,0 +1,16 @@
+In the case where you configured a aws profile on the machine you're running this from and NOT using the aws default
+
+Can either add to main.tf in the provider object the field: profile = "myawsprofile"
+so:
+
+provider "aws" {
+    region  = "us-east-1"
+    profile = "myawsprofile"
+}
+
+or you can define it for that specific terminal session:
+export AWS_PROFILE="myawsprofile"
+export AWS_REGION="us-east-1"
+terraform apply
+
+This is if you don't want your aws profile name in a file uploaded to the repo.
